@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELOHÏM-GESTION V2.3 PRO</title>
+<meta name="theme-color" content="#667eea">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;min-height:100vh}
+.glass{background:rgba(255,255,255,0.15);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.2);box-shadow:0 8px 32px rgba(0,0,0,0.1)}
+.btn-hover{transition:all 0.3s ease}
+.btn-hover:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(0,0,0,0.2)}
+input:focus,select:focus{outline:none;ring:2px;ring-color:#fff}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:rgba(255,255,255,0.1)}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.3);border-radius:4px}
+.fade-in{animation:fadeIn 0.5s ease}@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body class="p-2 md:p-4">
+<div id="app"></div>
+<script>
+// === ELOHÏM-GESTION V2.3 PRO - VERSION FINALE CLIENT ===
+const APP_NAME="ELOHÏM-GESTION V2.3";
+const APP_VERSION="2.3.0";
+let DB={entreprise:null,user:null,ventes:[],dateCreation:null};
+
+function saveDB(){localStorage.setItem('ELOHIM_DB_V23',JSON.stringify(DB))}
+function loadDB(){let d=localStorage.getItem('ELOHIM_DB_V23');if(d){DB=JSON.parse(d);return true}return false}
+function formatFCFA(n){return n.toLocaleString('fr-FR')+' FCFA'}
+function getToday(){return new Date().toLocaleDateString('fr-FR')}
+function getTime(){return new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
+
+function showLogin(){
+document.getElementById('app').innerHTML=`
+<div class="max-w-md mx-auto mt-10 md:mt-20 glass rounded-3xl p-6 md:p-8 text-white fade-in">
+<div class="text-center mb-6">
+<h1 class="text-3xl md:text-4xl font-bold mb-2">${APP_NAME}</h1>
+<p class="opacity-80 text-sm">Logiciel de caisse PRO pour TPE/PME</p>
+<p class="opacity-60 text-xs mt-1">Wave • MTN MoMo • Orange Money • Cash</p>
+</div>
+${DB.entreprise?`
+<div class="bg-white/10 rounded-2xl p-4 mb-6 text-center">
+<h2 class="text-xl font-bold">${DB.entreprise.nom}</h2>
+<p class="opacity-80 text-sm">${DB.entreprise.secteur}</p>
+<p class="opacity-60 text-xs mt-1">Client depuis ${DB.dateCreation}</p>
+</div>`:`
+<input id="nomEnt" placeholder="Nom de votre entreprise" class="w-full p-3 mb-3 rounded-xl text-black font-semibold">
+<select id="secteur" class="w-full p-3 mb-3 rounded-xl text-black">
+<option>Bar / Cave</option><option>Maquis / Restaurant</option><option>Boutique / Superette</option>
+<option>Salon de coiffure</option><option>Pharmacie</option><option>Quincaillerie</option><option>Autre commerce</option>
+</select>`:''}
+<input id="tel" placeholder="Numéro WhatsApp du gérant" class="w-full p-3 mb-3 rounded-xl text-black" type="tel">
+<input id="mdp" type="password" placeholder="Mot de passe sécurisé" class="w-full p-3 mb-4 rounded-xl text-black">
+<button onclick="login()" class="w-full bg-white text-purple-700 p-3 rounded-xl font-bold text-lg btn-hover">
+${DB.entreprise?'Se connecter':'Créer mon compte entreprise'}
+</button>
+<p class="text-center text-xs opacity-60 mt-4">100% Offline • Données sécurisées sur votre téléphone</p>
+</div>`}
+
+function login(){
+let tel=document.getElementById('tel').value.trim(),mdp=document.getElementById('mdp').value;
+if(!tel||!mdp)return alert('Remplis ton numéro et mot de passe');
+if(!DB.entreprise){
+let nom=document.getElementById('nomEnt').value.trim(),secteur=document.getElementById('secteur').value;
+if(!nom)return alert('Donne le nom de ton entreprise');
+DB.entreprise={nom,secteur,tel};DB.user={tel,mdp};DB.dateCreation=getToday();DB.ventes=[];
+alert(`Bienvenue ${nom} !\nTon compte ELOHÏM-GESTION est créé.`);
+}else{
+if(DB.user.tel!==tel||DB.user.mdp!==mdp)return alert('Numéro ou mot de passe incorrect');
+}
+saveDB();showDashboard()}
+
+function showDashboard(){
+let today=getToday();
+let ventesJour=DB.ventes.filter(v=>v.date===today);
+let total=ventesJour.reduce((s,v)=>s+v.montant,0);
+let wave=ventesJour.filter(v=>v.paiement==='Wave').reduce((s,v)=>s+v.montant,0);
+let mtn=ventesJour.filter(v=>v.paiement==='MTN MoMo').reduce((s,v)=>s+v.montant,0);
+let orange=ventesJour.filter(v=>v.paiement==='Orange Money').reduce((s,v)=>s+v.montant,0);
+let cash=ventesJour.filter(v=>v.paiement==='Cash').reduce((s,v)=>s+v.montant,0);
+
+document.getElementById('app').innerHTML=`
+<div class="max-w-7xl mx-auto fade-in">
+<div class="glass rounded-3xl p-4 md:p-6 mb-4 text-white">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+<div>
+<h1 class="text-xl md:text-2xl font-bold">${DB.entreprise.nom}</h1>
+<p class="opacity-80 text-sm">${DB.entreprise.secteur} • ${today}</p>
+</div>
+<div class="flex gap-2">
+<button onclick="showStats()" class="bg-white/20 px-3 py-2 rounded-xl text-sm btn-hover">📊 Stats</button>
+<button onclick="logout()" class="bg-red-500 px-3 py-2 rounded-xl text-sm btn-hover">Déconnexion</button>
+</div>
+</div>
+</div>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+<div class="glass rounded-2xl p-3 md:p-4 text-white text-center btn-hover">
+<p class="opacity-80 text-xs">TOTAL JOUR</p><p class="text-lg md:text-2xl font-bold">${total.toLocaleString()}</p>
+</div>
+<div class="glass rounded-2xl p-3 md:p-4 text-white text-center btn-hover">
+<p class="opacity-80 text-xs">Wave</p><p class="text-md md:text-xl font-bold">${wave.toLocaleString()}</p>
+</div>
+<div class="glass rounded-2xl p-3 md:p-4 text-white text-center btn-hover">
+<p class="opacity-80 text-xs">MTN MoMo</p><p class="text-md md:text-xl font-bold">${mtn.toLocaleString()}</p>
+</div>
+<div class="glass rounded-2xl p-3 md:p-4 text-white text-center btn-hover">
+<p class="opacity-80 text-xs">Orange</p><p class="text-md md:text-xl font-bold">${orange.toLocaleString()}</p>
+</div>
+<div class="glass rounded-2xl p-3 md:p-4 text-white text-center btn-hover">
+<p class="opacity-80 text-xs">Cash</p><p class="text-md md:text-xl font-bold">${cash.toLocaleString()}</p>
+</div>
+</div>
+
+<div class="glass rounded-3xl p-4 md:p-6 mb-4 text-white">
+<h2 class="text-lg md:text-xl font-bold mb-4">💰 Nouvelle Vente</h2>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+<input id="produit" placeholder="Nom du produit/service" class="p-3 rounded-xl text-black font-semibold">
+<input id="montant" type="number" placeholder="Montant FCFA" class="p-3 rounded-xl text-black font-semibold">
+<select id="paiement" class="p-3 rounded-xl text-black font-semibold">
+<option>Wave</option><option>MTN MoMo</option><option>Orange Money</option><option>Cash</option>
+</select>
+<button onclick="addVente()" class="bg-green-500 p-3 rounded-xl font-bold btn-hover">✓ Encaisser</button>
+</div>
+</div>
+
+<div class="glass rounded-3xl p-4 md:p-6 text-white">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
+<h2 class="text-lg md:text-xl font-bold">🧾 Ventes du jour (${ventesJour.length})</h2>
+<div class="flex gap-2">
+<button onclick="printPDF()" class="bg-blue-500 px-3 py-2 rounded-xl text-sm btn-hover">🖨️ PDF</button>
+<button onclick="exportExcel()" class="bg-emerald-500 px-3 py-2 rounded-xl text-sm btn-hover">📊 Excel</button>
+<button onclick="clearDay()" class="bg-orange-500 px-3 py-2 rounded-xl text-sm btn-hover">🗑️ Vider</button>
+</div>
+</div>
+<div class="max-h-96 overflow-y-auto space-y-2">
+${ventesJour.length?ventesJour.map((v,i)=>`
+<div class="bg-white/10 p-3 rounded-xl flex justify-between items-center btn-hover">
+<div class="flex-1">
+<p class="font-bold">${v.produit}</p>
+<p class="text-xs opacity-80">${v.heure} • ${v.paiement}</p>
+</div>
+<div class="text-right">
+<p class="font-bold">${v.montant.toLocaleString()} F</p>
+<button onclick="delVente(${i})" class="text-red-300 text-xs">Suppr</button>
+</div>
+</div>`).join(''):`
+<div class="text-center py-8 opacity-60">
+<p class="text-4xl mb-2">📭</p>
+<p>Aucune vente aujourd’hui</p>
+<p class="text-sm">Enregistre ta première vente ci-dessus</p>
+</div>`}
+</div>
+</div>
+
+<div class="text-center text-white opacity-60 text-xs mt-4">
+<p>${APP_NAME} • Licence ${DB.entreprise.nom} • ${APP_VERSION}</p>
+</div>
+</div>`}
+
+function addVente(){
+let produit=document.getElementById('produit').value.trim();
+let montant=parseInt(document.getElementById('montant').value);
+let paiement=document.getElementById('paiement').value;
+if(!produit||!montant||montant<=0)return alert('Remplis le produit et un montant valide');
+DB.ventes.unshift({produit,montant,paiement,heure:getTime(),date:getToday(),timestamp:Date.now()});
+saveDB();showDashboard();
+document.getElementById('produit').value='';document.getElementById('montant').value='';
+document.getElementById('produit').focus();
+}
+
+function delVente(i){
+let ventesJour=DB.ventes.filter(v=>v.date===getToday());
+let vente=ventesJour[i];
+if(confirm(`Supprimer ${vente.produit} - ${formatFCFA(vente.montant)} ?`)){
+let idx=DB.ventes.findIndex(v=>v.timestamp===vente.timestamp);
+DB.ventes.splice(idx,1);saveDB();showDashboard();
+}}
+
+function clearDay(){
+if(confirm('Vider toutes les ventes d’aujourd’hui ? Action irréversible !')){
+DB.ventes=DB.ventes.filter(v=>v.date!==getToday());saveDB();showDashboard();
+}}
+
+function logout(){if(confirm('Se déconnecter de '+DB.entreprise.nom+' ?')){document.getElementById('app').innerHTML='';showLogin()}}
+
+function printPDF(){
+const {jsPDF}=window.jspdf;let doc=new jsPDF();
+let ventesJour=DB.ventes.filter(v=>v.date===getToday());
+let total=ventesJour.reduce((s,v)=>s+v.montant,0);
+let wave=ventesJour.filter(v=>v.paiement==='Wave').reduce((s,v)=>s+v.montant,0);
+let mtn=ventesJour.filter(v=>v.paiement==='MTN MoMo').reduce((s,v)=>s+v.montant,0);
+let orange=ventesJour.filter(v=>v.paiement==='Orange Money').reduce((s,v)=>s+v.montant,0);
+let cash=ventesJour.filter(v=>v.paiement==='Cash').reduce((s,v)=>s+v.montant,0);
+
+doc.setFontSize(22);doc.text(`${DB.entreprise.nom}`,105,20,{align:'center'});
+doc.setFontSize(11);doc.text(`${DB.entreprise.secteur}`,105,28,{align:'center'});
+doc.setFontSize(14);doc.text(`RAPPORT JOURNALIER DU ${getToday()}`,105,38,{align:'center'});
+doc.setFontSize(12);
+doc.text(`Chiffre d'affaires total: ${formatFCFA(total)}`,20,55);
+doc.text(`Wave: ${formatFCFA(wave)} | MTN MoMo: ${formatFCFA(mtn)}`,20,63);
+doc.text(`Orange Money: ${formatFCFA(orange)} | Cash: ${formatFCFA(cash)}`,20,71);
+doc.text(`Nombre de ventes: ${ventesJour.length}`,20,79);
+
+doc.line(20,85,190,85);
+let y=95;doc.setFontSize(10);
+doc.text('Heure',20,y);doc.text('Produit',45,y);doc.text('Paiement',110,y);doc.text('Montant',160,y);
+y+=5;doc.line(20,y,190,y);y+=7;
+
+ventesJour.forEach(v=>{
+if(y>270){doc.addPage();y=20}
+doc.text(v.heure,20,y);doc.text(v.produit.substring(0,25),45,y);
+doc.text(v.paiement,110,y);doc.text(formatFCFA(v.montant),190,y,{align:'right'});
+y+=7});
+
+doc.setFontSize(8);doc.text(`Généré par ${APP_NAME} • ${new Date().toLocaleString('fr-FR')}`,105,285,{align:'center'});
+doc.save(`Rapport_${DB.entreprise.nom}_${getToday().replace(/\//g,'-')}.pdf`);
+}
+
+function exportExcel(){
+let ventesJour=DB.ventes.filter(v=>v.date===getToday());
+if(!ventesJour.length)return alert('Aucune vente à exporter');
+let data=ventesJour.map(v=>({
+Date:v.date,Heure:v.heure,Produit:v.produit,'Mode Paiement':v.paiement,'Montant FCFA':v.montant
+}));
+let ws=XLSX.utils.json_to_sheet(data);
+let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Ventes');
+XLSX.writeFile(wb,`Ventes_${DB.entreprise.nom}_${getToday().replace(/\//g,'-')}.xlsx`);
+}
+
+function showStats(){
+let totalAll=DB.ventes.reduce((s,v)=>s+v.montant,0);
+alert(`STATISTIQUES ${DB.entreprise.nom}\n\nChiffre d'affaires total: ${formatFCFA(totalAll)}\nNombre total ventes: ${DB.ventes.length}\nClient depuis: ${DB.dateCreation}\n\nVersion: ${APP_VERSION}`);
+}
+
+// INIT
+loadDB();showLogin();
+</script>
+</body>
+</html>
